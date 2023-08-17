@@ -1,0 +1,156 @@
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Timer;
+import java.util.TimerTask;
+
+public class VehicleNavigationApp {
+
+    private static final String SERVER_URL = "https://ip-ranges.amazonaws.com/ip-ranges.json";
+    public static void main(String[] args) {
+        
+        Timer timer = new Timer();
+        timer.schedule(new SendLocationTask(), 0, 1000);
+    }
+    
+    private static class SendLocationTask extends TimerTask {
+        @Override
+        public void run() {
+            double latitude = 37.7749; 
+            double longitude = -122.4194; 
+            
+            sendLocationToServer(latitude, longitude);
+        }
+        
+        private void sendLocationToServer(double latitude, double longitude) {
+            try {
+                URL url = new URL(SERVER_URL);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                
+                String payload = "latitude=" + latitude + "&longitude=" + longitude;
+                try (OutputStream os = connection.getOutputStream()) {
+                    byte[] input = payload.getBytes("utf-8");
+                    os.write(input, 0, input.length);
+                }
+                
+                int responseCode = connection.getResponseCode();
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    System.out.println("Location sent successfully.");
+                } else {
+                    System.out.println("Failed to send location. Response code: " + responseCode);
+                }
+                
+                connection.disconnect();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Map;
+import java.util.HashMap;
+
+public class DataCollection {
+    public static Map<String, Integer> collectTrafficDataFromExternalAPI() {
+        Map<String, Integer> trafficData = new HashMap<>();
+        
+        try {
+            // Replace with the actual API URL
+            String apiUrl = "https://ip-ranges.amazonaws.com/ip-ranges.json";
+            
+            URL url = new URL(apiUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            
+            int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+                
+            } else {
+                System.out.println("API request failed with response code: " + responseCode);
+            }
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        return trafficData;
+    }
+}
+ 
+import weka.core.Instance;
+import weka.core.Attribute;
+import weka.classifiers.functions.LinearRegression;
+import weka.core.Instances;
+import weka.core.DenseInstance;
+
+public class TrafficModel {
+    public static void main(String[] args) throws Exception {
+       
+        Instances data = ...;  // Load 
+        
+        int numAttributes = data.numAttributes();
+        data.setClassIndex(numAttributes - 1);
+
+        LinearRegression model = new LinearRegression();
+        model.buildClassifier(data);
+        
+        Instance newTrafficData = new DenseInstance(numAttributes);
+        newTrafficData.setDataset(data);
+        newTrafficData.setValue(0, feature1Value);
+        newTrafficData.setValue(1, feature2Value);
+        
+        double prediction = model.classifyInstance(newTrafficData);
+        System.out.println("Predicted value: " + prediction);
+    }
+}
+
+public class TrafficSignalControl {
+    public static Map<String, Integer> controlTrafficSignal(LinearRegression model, Map<String, Integer> trafficData) {
+        Instance newInstance = new DenseInstance(model.numAttributes());
+        newInstance.setDataset(model.getHeader());
+        
+        double prediction;
+        try {
+            prediction = model.classifyInstance(newInstance);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+        
+        Map<String, Integer> signalTimings = convertPredictionToSignalTimings(prediction);
+        return signalTimings;
+    }
+}
+
+import static spark.Spark.*;
+
+public class TrafficServer {
+    public static void main(String[] args) {
+        port(8090);
+        
+        post("/update_signal", (request, response) -> {
+            Map<String, Integer> trafficData = DataCollection.collectTrafficData();
+            LinearRegression model = TrafficModel.trainModel();
+            
+            Map<String, Integer> signalTimings = TrafficSignalControl.controlTrafficSignal(model, trafficData);
+            
+            response.type("application/json");
+            return "{\"status\":\"Signal updated\"}";
+        });
+    }
+}
